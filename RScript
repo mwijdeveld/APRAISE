@@ -1,0 +1,209 @@
+rm(list=ls())
+##### Load relevant packages #####
+library("scales")
+library("rio")
+library("ggplot2")
+library("ggpubr")
+library("dplyr")
+library("foreign")
+library("devtools")
+library("tidyr")
+library("rlang")
+library("digest")
+library("DescTools")
+library("tidyverse")
+library("nlme")
+library("splines")
+library("grid")
+library("ggthemes")
+library("xlsx")
+library("png")
+library("gridExtra")
+library("kader")
+library("car")
+library("lme4")
+library("lmerTest")
+library("readxl")
+library("stargazer")
+library("broom")
+library("emmeans")
+library("magrittr")
+library("MuMIn")
+library("knitr")
+library("ggeffects")
+library("naniar")
+library("gdata")
+library("pbkrtest")
+library("patchwork")
+library("ggsci")
+library("corrplot")
+library("rstatix")
+library("ggpmisc")
+library("tableone")
+library("ggpol")
+
+##### Import dataset #####
+home <- "G:/diva/Promovendi/Max research group/2. Researchers/Madelief Wijdeveld/PhD/2018_053 APRAISE/Resultaten/"
+data <- read.xlsx("G:/diva/Promovendi/Max research group/2. Researchers/Madelief Wijdeveld/PhD/2018_053 APRAISE/Resultaten/APRAISEBasicInfo.xlsx", sheetIndex = 1)
+d_longGlucose <- read.xlsx("G:/diva/Promovendi/Max research group/2. Researchers/Madelief Wijdeveld/PhD/2018_053 APRAISE/Resultaten/d_longGlucose.xlsx", sheetIndex = 1)
+Div <- read.xlsx("G:/diva/Promovendi/Max research group/2. Researchers/Madelief Wijdeveld/PhD/2018_053 APRAISE/16S analyse/Analyses voor APRAISE manuscript/alpha_diversity/Madelief_alpha_div_puntkomma.xlsx", sheetIndex = 1)
+
+##### Set correct layout for plots #####
+theme_Publication <- function(base_size=12, base_family="sans") {
+  (theme_foundation(base_size=base_size, base_family=base_family)
+   + theme(plot.title = element_text(face = "bold",
+                                     size = rel(1.2), hjust = 0.5),
+           text = element_text(),
+           panel.background = element_rect(colour = NA),
+           plot.background = element_rect(colour = NA),
+           panel.border = element_rect(colour = NA),
+           axis.title = element_text(face='bold',size = rel(1)),
+           axis.title.y = element_text(angle=90,vjust =2),
+           axis.title.x = element_text(vjust = -0.2),
+           axis.text = element_text(), 
+           axis.line = element_line(colour="black"),
+           axis.ticks = element_line(),
+           panel.grid.major = element_line(colour="#f0f0f0"), # turn back on if you want grid
+           panel.grid.minor = element_blank(),
+           legend.key = element_rect(colour = NA),
+           legend.position = "right",
+           legend.key.size= unit(0.2, "cm"),
+           legend.spacing  = unit(0, "cm"),
+           legend.title = element_text(face='bold'),
+           plot.margin=unit(c(10,5,5,5),"mm"),
+           strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+           strip.text = element_text(face="bold")
+   ))
+}
+
+CreateTableOne(vars = c("Glucosemin15", 
+                        "Glucose0", 
+                        "Glucose10", 
+                        "Glucose15", 
+                        "Glucose20", 
+                        "Glucose30", 
+                        "Glucose60", 
+                        "Glucose90", 
+                        "Glucose120",
+                        "Insulinmin15", 
+                        "Insulin0", 
+                        "Insulin10", 
+                        "Insulin15", 
+                        "Insulin20", 
+                        "Insulin30", 
+                        "Insulin60", 
+                        "Insulin90", 
+                        "Insulin120",
+                        "IGI", 
+                        "Oral_DI", 
+                        "HOMA.IR", 
+                        "HOMA.beta",
+                        "res_Insulinogenic_index", 
+                        "res_Glucose_iAUC", 
+                        "res_Insulin_iAUC", 
+                        "iAUC_ratio",
+                        "res_Glucose_iAUC_60min",
+                        "res_Insulin_iAUC_60min",
+                        "iAUC_60min_ratio"), 
+               strata = "Group", data = data_filt, includeNA = FALSE)
+
+##### Convert Acetate to factor #####
+d_longGlucose$Acetate[d_longGlucose$Acetate == 1] <- 'Low'
+d_longGlucose$Acetate[d_longGlucose$Acetate == 2] <- 'High'
+d_longGlucose$Acetate <- factor(d_longGlucose$Acetate)
+d_longGlucose$Acetate <- factor(d_longGlucose$Acetate, levels(d_longGlucose$Acetate)[c(2,1)])
+d_longGlucose$Acetate
+
+##### Calculate AUCs from 0 to 120 minutes and save as csv file #####
+d_longGlucose$ID <- factor(d_longGlucose$ID)
+cat('There are', length(unique(d_longGlucose$ID)), 'subjects in the initial dataset.\n')
+
+res <- d_longGlucose %>% 
+  group_by(ID) %>%
+  filter(time >= 0) %>%
+  filter (Glucose != 'NA') %>% # solution is to subset to only keep the ones without NA
+  summarize(AUC=AUC(x=time,
+                    y=Glucose, 
+                    method = 'spline'), # default is trapezoidal, spline is better!
+            mean=mean(Glucose))
+res
+res$Acetate <- d_longGlucose$Acetate[match(res$ID, d_longGlucose$ID)]
+write.csv(res, file = "AUC_Glucose_APRAISE_120min.csv", row.names = FALSE)
+
+##### Calculate AUCs from 0 to 60 minutes and save as csv file #####
+d_longGlucose$ID <- factor(d_longGlucose$ID)
+cat('There are', length(unique(d_longGlucose$ID)), 'subjects in the initial dataset.\n')
+
+res <- d_longGlucose %>% 
+  group_by(d_longGlucose$ID) %>%
+  filter(time >= 0) %>%
+  filter(time <= 61) %>%
+  filter (Glucose != 'NA') %>% # solution is to subset to only keep the ones without NA
+  summarize(AUC=AUC(x=time,
+                    y=Glucose, 
+                    method = 'spline'), # default is trapezoidal, spline is better!
+            mean=mean(Glucose))
+res
+res$Acetate <- d_longGlucose$Acetate[match(res$ID, d_longGlucose$ID)]
+write.csv(res, file = "AUC_Glucose_APRAISE_60min.csv", row.names = FALSE)
+
+##### PLOT Glucose per time by Acetate group #####
+pl1 <- ggplot(data=d_long_NoMed, aes(x = time, y = Glucose))+
+  geom_point(aes(x=time, y=Mean,
+                 col=Group), size = 3)+
+  geom_line(aes(x=time, y=Mean, col=Group), size = 1)+
+  geom_errorbar(aes(ymin = Mean, ymax = ForPlot, col=Group), width = 1.5, size = 1)+
+  scale_x_continuous(breaks=c(-15, 0, 10, 15, 20, 30, 60, 90, 120))+
+  scale_color_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  labs(x='Time (min)', title='Glucose response upon SMMT (med. excl.)', y='Glucose (mmol/L)')+
+  theme_Publication()+
+  annotate("text", x=75, y=7.1, label = "p = 0.01", fontface = 2)+
+  ylim(4.8, 7.7)+
+  #theme(panel.grid.major.x = element_line(size = 0.5, color='grey'))+
+  theme(legend.position = 'right')
+pl1
+
+pl1 <- pl1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                   panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+# Repeat for insulin #
+pl2 <- ggplot(data=d_long_Insulin_NoMed, aes(x = time, y = Insulin))+
+  #geom_smooth(aes(group = Group, col = Group), method = "loess", level=0.68)+
+  geom_point(aes(x=time, y=Mean,
+                 col=Group), size = 3)+
+  #geom_boxplot(aes(x = time, y = Glucose, color = Group), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_line(aes(x=time, y=Mean, col=Group), size = 1)+
+  geom_errorbar(aes(ymin = Mean, ymax = ForPlot, col=Group), width = 1.5, size = 1)+
+  scale_x_continuous(breaks=c(-15, 0, 10, 15, 20, 30, 60, 90, 120))+
+  scale_color_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  labs(x='Time (min)', title='Insulin response upon SMMT (med. excl.)', y='Insulin (pmol/L)')+
+  theme_Publication()+
+  annotate("text", x=75, y=380, label = "p = 0.006", fontface = 2)+
+  ylim(0, 500)+
+  #theme(panel.grid.major.x = element_line(size = 0.5, color='grey'))+
+  theme(legend.position = 'right')
+pl2
+
+pl2 <- pl2 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                   panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+
+
+
+pl1 <- pl1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+            panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+
+pl1 <- pl
+pl12 <- rbind(pl1, pl2)
+plots <- ggarrange(pl1, pl2,
+                   labels = c("a", "b"),
+                   ncol = 1, nrow = 2)
+
+ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group_2.pdf', width = 7, height = 10, device = 'pdf')
+ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group_2.png', width = 7, height = 10, device = 'png')
+ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group_2.jpg', width = 7, height = 10, device = 'jpeg')
+
+ggsave(pl, filename = 'Spline_Glucose_per_Acetate_group_2.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl, filename = 'Spline_Glucose_per_Acetate_group_2.png', width = 7, height = 5, device = 'png')
+ggsave(pl, filename = 'Spline_Glucose_per_Acetate_group_2.jpg', width = 7, height = 5, device = 'jpeg')

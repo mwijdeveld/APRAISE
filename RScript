@@ -187,23 +187,636 @@ pl2
 pl2 <- pl2 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
                    panel.background = element_blank(), axis.line = element_line(colour = "black"))
 
-
-
-
-pl1 <- pl1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-            panel.background = element_blank(), axis.line = element_line(colour = "black"))
-
-
-pl1 <- pl
 pl12 <- rbind(pl1, pl2)
 plots <- ggarrange(pl1, pl2,
                    labels = c("a", "b"),
                    ncol = 1, nrow = 2)
 
-ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group_2.pdf', width = 7, height = 10, device = 'pdf')
-ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group_2.png', width = 7, height = 10, device = 'png')
-ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group_2.jpg', width = 7, height = 10, device = 'jpeg')
+ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group.pdf', width = 7, height = 10, device = 'pdf')
+ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group.png', width = 7, height = 10, device = 'png')
+ggsave(plots, filename = 'Spline_Glucose_and_Insulin_per_Acetate_group.jpg', width = 7, height = 10, device = 'jpeg')
 
-ggsave(pl, filename = 'Spline_Glucose_per_Acetate_group_2.pdf', width = 7, height = 5, device = 'pdf')
-ggsave(pl, filename = 'Spline_Glucose_per_Acetate_group_2.png', width = 7, height = 5, device = 'png')
-ggsave(pl, filename = 'Spline_Glucose_per_Acetate_group_2.jpg', width = 7, height = 5, device = 'jpeg')
+# doesn't work with missing values, remove them
+wo_na <- d_longGlucose %>% filter(Glucose != 'NA')
+wo_na <- as.data.frame(wo_na) # doesn't work with tibble, make into DF
+
+# model 0 -> only Time (spline)
+m0 = lme(Glucose ~ ns(time, df = 3), random = ~ 1 | ID, data = wo_na, method = 'ML')
+anova(m0) # as expected, time is super significant
+
+# model 1 -> Time (spline) and Acetate group
+m1 = lme(Glucose ~ ns(time, df = 3) + Group, random = ~ 1 | ID, data = wo_na, method = 'ML')
+anova(m1) # group is not significant
+
+# model 2 -> Time (spline), Acetate group, and interaction between Time (spline) & Acetate group
+m2 = lme(Glucose ~ ns(time, df = 3) * Group, random = ~ 1 | ID, data = wo_na, method = 'ML')
+anova(m2) # time group interaction is not significant, sadly
+
+# model 3 -> model 2 + Gender & Age (as covariates)
+m3 = lme(Glucose ~ ns(time, df = 3) * Group + Gender + Age, random = ~ 1 | ID, data = wo_na, method = 'ML')
+anova(m3) # age and gender are significant, but group is not
+
+# model 4 -> model 3 + interactions between Age and Time; and between Gender and Time
+m4 = lme(Glucose ~ ns(time, df = 3) * Group + Gender + Age + Age:time + Gender:time, random = ~ 1 | ID, data = wo_na, method = 'ML')
+anova(m4)
+
+# 1. Correlate BUTCoA to predictor species #
+# 1.1 Zotu 3
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu3, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu3)
+
+pl1 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu3))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "1. OTU 3 (Agathobacter spp.)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl1
+
+ggsave(pl1, filename = 'BUTCoA_ASV_1_Agathobacter.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl1, filename = 'BUTCoA_ASV_1_Agathobacter.png', width = 8, height = 5, device = 'png')
+ggsave(pl1, filename = 'BUTCoA_ASV_1_Agathobacter.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.2 Zotu 157
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu157, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu157)
+
+pl2 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu157))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "2. OTU 157 (Lachnospiraceae spp.)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl2
+
+getwd()
+setwd(home)
+ggsave(pl2, filename = 'BUTCoA_ASV_2_Lachnospiraceae.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl2, filename = 'BUTCoA_ASV_2_Lachnospiraceae.png', width = 8, height = 5, device = 'png')
+ggsave(pl2, filename = 'BUTCoA_ASV_2_Lachnospiraceae.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.3 Zotu 18
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu18, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu18)
+
+pl3 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu18))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "3. OTU 18 (Anaerostipes hadrus)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl3
+
+setwd(home)
+ggsave(pl3, filename = 'BUTCoA_ASV_3_Ahadrus.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl3, filename = 'BUTCoA_ASV_3_Ahadrus.png', width = 8, height = 5, device = 'png')
+ggsave(pl3, filename = 'BUTCoA_ASV_3_Ahadrus.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.4 Zotu82
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu82, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu82)
+
+pl4 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu82))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "4. OTU 82 (Lachnospiraceae spp.)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl4
+
+setwd(home)
+ggsave(pl4, filename = 'BUTCoA_ASV_4_Lachnospiraceae.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl4, filename = 'BUTCoA_ASV_4_Lachnospiraceae.png', width = 8, height = 5, device = 'png')
+ggsave(pl4, filename = 'BUTCoA_ASV_4_Lachnospiraceae.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.5 Zotu45
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu45, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu45)
+
+pl5 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu45))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "5. OTU 45 (Dialister invisus)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl5
+
+setwd(home)
+ggsave(pl5, filename = 'BUTCoA_ASV_5_Dialister.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl5, filename = 'BUTCoA_ASV_5_Dialister.png', width = 8, height = 5, device = 'png')
+ggsave(pl5, filename = 'BUTCoA_ASV_5_Dialister.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.6 Zotu26
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu26, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu26)
+
+pl6 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu26))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "6. OTU 26 (Bacteroides uniformis)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl6
+
+setwd(home)
+ggsave(pl6, filename = 'BUTCoA_ASV_6_Buniformis.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl6, filename = 'BUTCoA_ASV_6_Buniformis.png', width = 8, height = 5, device = 'png')
+ggsave(pl6, filename = 'BUTCoA_ASV_6_Buniformis.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.7 Zotu16
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu16, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu16)
+
+pl7 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu16))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "7. OTU 16 (Agathobacter spp.)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl7
+
+setwd(home)
+ggsave(pl7, filename = 'BUTCoA_ASV_7_Agathobacter.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl7, filename = 'BUTCoA_ASV_7_Agathobacter.png', width = 8, height = 5, device = 'png')
+ggsave(pl7, filename = 'BUTCoA_ASV_7_Agathobacter.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.8 Zotu96
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu96, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu96)
+
+pl8 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu96))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "8. OTU 96 (Bacteroides spp.)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl8
+
+setwd(home)
+ggsave(pl8, filename = 'BUTCoA_ASV_8_Bacteroides.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl8, filename = 'BUTCoA_ASV_8_Bacteroides.png', width = 8, height = 5, device = 'png')
+ggsave(pl8, filename = 'BUTCoA_ASV_8_Bacteroides.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.9 Zotu14
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu14, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu14)
+
+pl9 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu14))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "9. OTU 14 (Faecalibacterium CM04-06)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl9
+
+setwd(home)
+ggsave(pl9, filename = 'BUTCoA_ASV_9_Faecalibacterium.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl9, filename = 'BUTCoA_ASV_9_Faecalibacterium.png', width = 8, height = 5, device = 'png')
+ggsave(pl9, filename = 'BUTCoA_ASV_9_Faecalibacterium.jpg', width = 8, height = 5, device = 'jpeg')
+
+# 1.10 Zotu39
+LM <- lm(OTU$BUTCoAPerc ~ OTU$Zotu39, data=OTU)
+LM
+
+t <- cor.test(OTU$BUTCoAPerc, OTU$Zotu39)
+
+pl10 <- ggplot(OTU, aes(x = BUTCoAPerc, y = Zotu39))+
+  geom_smooth(method = "lm", se = T, color = "dark grey")+
+  geom_point(aes(fill = Group), size = 2, shape = 21)+
+  labs(title = "10. OTU 39 (Ruminococcaceae UCG-002)",
+       subtitle = paste("Rho =", signif(t$estimate, digits = 3),
+                        #"S-statistic =", signif(t$statistic, digits = 3),
+                        "P = ", signif(t$p.value, digits = 2)),
+       x = "Fecal BUTCoA genes per 16S gene copies",
+       y = "Relative abundance")+
+  scale_fill_manual(labels = c("High", "Low"), values = c(pal_nejm()(2)[2], pal_nejm()(2)[1]))+
+  theme_Publication()+
+  theme(legend.title=element_text(size=20), 
+        legend.text = element_text(size = 20),
+        axis.text=element_text(size=16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        plot.subtitle = element_text(size = 16, hjust = 0.5))
+pl10
+
+setwd(home)
+ggsave(pl10, filename = 'BUTCoA_ASV_10_Ruminococcaceae.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl10, filename = 'BUTCoA_ASV_10_Ruminococcaceae.png', width = 8, height = 5, device = 'png')
+ggsave(pl10, filename = 'BUTCoA_ASV_10_Ruminococcaceae.jpg', width = 8, height = 5, device = 'jpeg')
+
+##### Save combined corplots #####
+plots <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7, pl8, pl9, pl10,
+                   labels = c("A", "B", "C",
+                              "D", "E", "F",
+                              "G", "H", "I", 
+                              "J"), 
+                   ncol = 3, nrow = 4, common.legend = TRUE)
+plots
+
+plots <- annotate_figure(plots, top = text_grob("Correlations BUTCoA and top predictor OTUs",
+                                                color = "black", face = "bold", size = 20))
+
+ggsave(plots, filename = 'BUTCoA_OTU_combined.pdf', width = 20, height = 18, device = 'pdf')
+ggsave(plots, filename = 'BUTCoA_OTU_combined.png', width = 20, height = 18, device = 'png')
+ggsave(plots, filename = 'BUTCoA_OTU_combined.jpg', width = 20, height = 18, device = 'jpeg')
+
+# Convert alpha diversity data to long format for boxplots #
+Div_long <- Div %>%
+  pivot_longer(
+    cols = c("Observed", "Shannon", "InvSimpson", "Fisher"),
+    names_prefix = "ID",
+    values_to = "Value",
+    values_drop_na = F
+  )
+rio :: export(Div_long, "Div_long_temp.xlsx")
+
+Div_long$name <- factor(Div_long$name,
+                       levels = c("Observed", "Shannon", "InvSimpson", "Fisher"),ordered = TRUE)
+
+pl <- ggplot(Div_long, aes(x = name, y = Value, color = Group))+
+  geom_boxplot(lwd = 1, fatten = 1, width = 1)+
+  geom_point(position = position_jitterdodge(), show.legend = F)+
+  ggtitle("Alpha diversity")+
+  theme_Publication()+
+  labs(y = "Alpha diversity", x = "Index")+
+  #scale_x_discrete("Index", labels = c("Fecal acetate", "Fecal butyrate", "Fecal propionate"))+
+  stat_compare_means(method = "t.test",
+                     label = "p.format", size = 6, label.y = 3.1,
+                     show.legend = F)+
+  scale_color_manual(breaks=c("High", "Low"), values=c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  theme(axis.text=element_text(size=12),
+        axis.title.x=element_text(size=12,face="bold"),
+        axis.title.y=element_text(size=12,face="bold"),
+        plot.title=element_text(hjust=0.5, size = 18),
+        strip.text.x = element_text(
+          size = 20, color = "black"))+
+  guides(colour = guide_legend(title.position = "top",
+                               override.aes = list(shape = 22,
+                                                   size = 10)))+
+  scale_y_continuous(trans = 'log10')
+pl
+
+ggsave(pl, filename = 'Alpha_combined_jit.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl, filename = 'Alpha_combined_jit.png', width = 7, height = 5, device = 'png')
+ggsave(pl, filename = 'Alpha_combined_jit.jpg', width = 7, height = 5, device = 'jpeg')
+
+##### Read RDS file #####
+readRDS("appraise_phyloseq_from_HELIUS_V4_seq.RDS")
+myobject <- readRDS("appraise_phyloseq_from_HELIUS_V4_seq.RDS")
+meta_excel <- read_excel("APRAISEBasicInfo.xlsx", col_names = TRUE)
+meta_file <- (as.data.frame(meta_excel)) %>%
+  arrange(`ID`)
+sampledata <- sample_data(as.data.frame(meta_file, row.names=sample_names(myobject)))
+phy1 <- merge_phyloseq(myobject,sampledata)
+
+# Calculate distances
+##### Weighted UniFrac #####
+dist_wunifrac <- distance(myobject, method="wunifrac")
+pcoa_wunifrac <- pcoa(dist_wunifrac, correction="lingoes")
+pcoa_wunifrac$values;
+biplot.pcoa(pcoa_wunifrac)
+summary(pcoa_wunifrac)
+dist_wunifrac <- distance(myobject, method="wunifrac")
+
+ordu_wunifrac = ordinate(myobject, "PCoA", "unifrac", weighted=TRUE)
+plot_ordination(myobject, ordu_wunifrac, color="Group", type="samples")
+pl <- plot_ordination(phy1, ordu_wunifrac, type="samples", color="Group") + 
+  stat_ellipse(size=1) + 
+  ggtitle("PCoA Weighted UniFrac") +
+  theme_Publication() +
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1])) +
+  labs(x = "PCoA 1 (39.6%)", y = "PCoA 2 (11.7%)")
+ggsave(pl, filename = 'PCoA_Weighted_Unifrac.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl, filename = 'PCoA_Weighted_Unifrac.png', width = 7, height = 5, device = 'png')
+ggsave(pl, filename = 'PCoA_Weighted_Unifrac.jpg', width = 7, height = 5, device = 'jpeg')
+
+##### Bray-Curtis #####
+dist_bray <- vegdist(OTU, method="bray")
+pcoa_bray <- pcoa(dist_bray, correction="lingoes")
+pcoa_bray$values
+biplot.pcoa(pcoa_bray)
+
+##### Graph per OTU abundancy #####
+pl1 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu3*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('1. Agathobacter spp.')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl1
+
+pl1 <- pl1 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl1, filename = 'ASV_1_Agathobacter.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl1, filename = 'ASV_1_Agathobacter.png', width = 7, height = 5, device = 'png')
+ggsave(pl1, filename = 'ASV_1_Agathobacter.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl2 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu157*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('2. Lachnospiraceae spp.')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl2
+
+pl2 <- pl2 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl2, filename = 'ASV_2_Lachnospiraceae.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl2, filename = 'ASV_2_Lachnospiraceae.png', width = 7, height = 5, device = 'png')
+ggsave(pl2, filename = 'ASV_2_Lachnospiraceae.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl3 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu18*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('3. Anaerostipes hadrus')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl3
+
+pl3 <- pl3 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl3, filename = 'ASV_3_Anaerostipes_hadrus.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl3, filename = 'ASV_3_Anaerostipes_hadrus.png', width = 7, height = 5, device = 'png')
+ggsave(pl3, filename = 'ASV_3_Anaerostipes_hadrus.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl4 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu82*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('4. Lachnospiraceae spp.')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl4
+
+pl4 <- pl4 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl4, filename = 'ASV_4_Lachnospiraceae.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl4, filename = 'ASV_4_Lachnospiraceae.png', width = 7, height = 5, device = 'png')
+ggsave(pl4, filename = 'ASV_4_Lachnospiraceae.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl5 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu45*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('5. Dialister invisus')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl5
+
+pl5 <- pl5 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl5, filename = 'ASV_5_Dialister_invisus.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl5, filename = 'ASV_5_Dialister_invisus.png', width = 7, height = 5, device = 'png')
+ggsave(pl5, filename = 'ASV_5_Dialister_invisus.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl6 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu26*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('6. Bacteroides uniformis')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl6
+
+pl6 <- pl6 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl6, filename = 'ASV_6_Bacteroides_uniformis.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl6, filename = 'ASV_6_Bacteroides_uniformis.png', width = 7, height = 5, device = 'png')
+ggsave(pl6, filename = 'ASV_6_Bacteroides_uniformis.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl7 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu16*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('7. Agathobacter spp.')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl7
+
+pl7 <- pl7 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl7, filename = 'ASV_7_Agathobacter.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl7, filename = 'ASV_7_Agathobacter.png', width = 7, height = 5, device = 'png')
+ggsave(pl7, filename = 'ASV_7_Agathobacter.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl8 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu96*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('8. Bacteroides spp.')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl8
+
+pl8 <- pl8 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl8, filename = 'ASV_8_Bacteroides.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl8, filename = 'ASV_8_Bacteroides.png', width = 7, height = 5, device = 'png')
+ggsave(pl8, filename = 'ASV_8_Bacteroides.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl9 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu14*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('9. Faecalibacterium CM04-06.')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl9
+
+pl9 <- pl9 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl9, filename = 'ASV_9_Faecalibacterium.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl9, filename = 'ASV_9_Faecalibacterium.png', width = 7, height = 5, device = 'png')
+ggsave(pl9, filename = 'ASV_9_Faecalibacterium.jpg', width = 7, height = 5, device = 'jpeg')
+
+pl10 <- ggplot(OTU_select_tr, aes(x=Acetate, y=Zotu39*100))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, paired = F)+
+  xlab('Group')+
+  ylab('Relative abundance [%]')+
+  ggtitle('10. Ruminococcaceae UCG-002.')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl10
+
+pl10 <- pl10 + labs(color = 'Group', fill = 'ButCoA group')
+
+ggsave(pl10, filename = 'ASV_10_Ruminococcaceae.pdf', width = 7, height = 5, device = 'pdf')
+ggsave(pl10, filename = 'ASV_10_Ruminococcaceae.png', width = 7, height = 5, device = 'png')
+ggsave(pl10, filename = 'ASV_10_Ruminococcaceae.jpg', width = 7, height = 5, device = 'jpeg')
+
+plots <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7, pl8, pl9, pl10,
+                   labels = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J"),
+                   ncol = 3, nrow = 4)
+plots
+
+comps <- list(c('Low', 'High'))
+
+##### fMRI data ROI results #####
+pl <- ggplot(ROI, aes(x=Acetate, y=L_Putamen_perc))+
+  geom_boxplot(aes(color = Acetate), outlier.colour = NA, show.legend = F, fatten = 1, lwd = 1.2)+
+  geom_jitter(aes(fill = Acetate), shape=21, color='black', position = position_jitter(width = 0.2, height = 0))+
+  theme_Publication()+
+  stat_compare_means(comparisons = comps, method = "wilcox.test", paired = F)+
+  xlab('Group')+
+  ylab('BOLD response signal change [%]')+
+  ggtitle('Pallatable food task C4: Anticipation chocolate milk - Left putamen activity')+
+  scale_color_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))+
+  scale_fill_manual(values = c(pal_nejm()(2)[2],pal_nejm()(2)[1]))
+pl
+
+pl <- pl + labs(fill = "ButCoA group")
+pl + labs(fill = "ButCoA group")
+
+ggsave(pl, filename = 'Plaatjes_C3_L_Putamen.pdf', width = 8, height = 5, device = 'pdf')
+ggsave(pl, filename = 'Plaatjes_C3_L_Putamen.png', width = 8, height = 5, device = 'png')
+ggsave(pl, filename = 'Plaatjes_C3_L_Putamen.jpg', width = 8, height = 5, device = 'jpeg')
